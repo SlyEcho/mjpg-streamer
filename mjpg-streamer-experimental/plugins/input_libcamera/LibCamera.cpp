@@ -38,8 +38,8 @@ int LibCamera::initCamera(int *width, int *height, int *stride, PixelFormat form
     if (!ok)
         throw std::runtime_error("illegal rotation value, Please use 0 or 180");
     transform = rot * transform;
-    if (!!(transform & Transform::Transpose))
-        throw std::runtime_error("transforms requiring transpose not supported");
+    //if (!!(transform & Transform::Transpose))
+    //    throw std::runtime_error("transforms requiring transpose not supported");
     config->transform = transform;
 
     switch (config->validate()) {

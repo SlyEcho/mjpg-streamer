@@ -36,7 +36,7 @@ using namespace std;
 /* private functions and variables to this plugin */
 static globals     *pglobal;
 
-typedef struct {
+struct context_settings {
     char *filter_args;
     int fps_set, fps,
         quality_set, quality,
@@ -45,16 +45,19 @@ typedef struct {
         br_set, br,
         sa_set, sa,
         gain_set, gain,
-        ex_set, ex;
-} context_settings;
+        ex_set, ex,
+        rot_set, rot;
+    
+    context_settings() : quality(80) {}
+};
 
-typedef struct {
+struct context {
     pthread_t   worker;
     pthread_mutex_t control_mutex;
     LibCamera camera;
     context_settings *init_settings;
     struct vdIn *videoIn;
-} context;
+};
 
 
 void *worker_thread(void *);
@@ -88,21 +91,9 @@ static void help() {
     " [-sa ].................: Set image saturation (integer)\n"\
     " [-ex ].................: Set exposure (integer)\n"\
     " [-gain ]...............: Set gain (integer)\n"
+    " [-rot ]................: Set rotation (integer)\n"
     " ---------------------------------------------------------------\n\n"\
     );
-}
-
-static context_settings* init_settings() {
-    context_settings *settings;
-    
-    settings = (context_settings*)calloc(1, sizeof(context_settings));
-    if (settings == NULL) {
-        IPRINT("error allocating context");
-        exit(EXIT_FAILURE);
-    }
-    
-    settings->quality = 80;
-    return settings;
 }
 
 /*** plugin interface functions ***/
@@ -128,7 +119,7 @@ int input_init(input_parameter *param, int plugin_no)
     
     pctx = new context();
     
-    settings = pctx->init_settings = init_settings();
+    settings = pctx->init_settings = new context_settings();
     pglobal = param->global;
     in = &pglobal->in[plugin_no];
     in->context = pctx;
@@ -173,6 +164,7 @@ int input_init(input_parameter *param, int plugin_no)
             {"ex", required_argument, 0, 0},            // 12
             {"b", required_argument, 0, 0},             // 13
             {"buffercount", required_argument, 0, 0},   // 14
+            {"rot", required_argument, 0, 0},           // 15
             {0, 0, 0, 0}
         };
     
@@ -223,6 +215,8 @@ int input_init(input_parameter *param, int plugin_no)
         case 13:
         OPTION_INT(14, buffercount)
             break;
+        OPTION_INT(15, rot)
+            break;
             
         default:
             help();
@@ -237,10 +231,9 @@ int input_init(input_parameter *param, int plugin_no)
     } else {
         settings->buffercount = MAX(settings->buffercount, 1);
     }
-    ret = pctx->camera.initCamera(&width, &height, &stride, formats::BGR888, settings->buffercount, 0);
+    ret = pctx->camera.initCamera(&width, &height, &stride, formats::BGR888, settings->buffercount, settings->rot);
     char *device_id = pctx->camera.getCameraId();
-    in->name = (char*)malloc((strlen(device_id) + 1) * sizeof(char));
-    sprintf(in->name, device_id);
+    in->name = strdup(device_id);
     if (ret) {
         IPRINT("LibCamera::initCamera() failed\n");
         goto fatal_error;
@@ -341,7 +334,7 @@ void *worker_thread(void *arg)
     /* set cleanup handler to cleanup allocated resources */
     pthread_cleanup_push(worker_cleanup, arg);
     
-    free(settings);
+    delete settings;
     pctx->init_settings = NULL;
     settings = NULL;
     
