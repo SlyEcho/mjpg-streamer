@@ -300,12 +300,6 @@ int input_stop(int id)
     input * in = &pglobal->in[id];
     context *pctx = (context*)in->context;
 
-    free(pctx->videoIn);
-
-    free(in->buf);
-    in->buf = NULL;
-    in->size = 0;
-
     if (pctx != NULL) {
         DBG("will cancel input thread\n");
         pthread_cancel(pctx->worker);
@@ -323,9 +317,6 @@ int input_run(int id)
     input * in = &pglobal->in[id];
     context *pctx = (context*)in->context;
 
-    in->buf = (uint8_t *) malloc(pctx->videoIn->width * pctx->videoIn->height);
-    in->size = 0;
-    
     if(pthread_create(&pctx->worker, 0, worker_thread, in) != 0) {
         worker_cleanup(in);
         fprintf(stderr, "could not start worker thread\n");
@@ -343,6 +334,9 @@ void *worker_thread(void *arg)
     context_settings *settings = (context_settings*)pctx->init_settings;
     int quality = settings->quality;
     LibcameraOutData frameData;
+
+    in->buf = (uint8_t *) malloc(pctx->videoIn->width * pctx->videoIn->height);
+    in->size = 0;
     
     /* set cleanup handler to cleanup allocated resources */
     pthread_cleanup_push(worker_cleanup, arg);
@@ -386,8 +380,13 @@ Return Value: -
 void worker_cleanup(void *arg)
 {
     input * in = (input*)arg;
+    free(in->buf);
+    in->buf = NULL;
+    in->size = 0;
+
     if (in->context != NULL) {
         context *pctx = (context*)in->context;
+        free(pctx->videoIn);
         delete pctx;
         in->context = NULL;
     }
